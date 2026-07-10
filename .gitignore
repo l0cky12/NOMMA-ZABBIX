@@ -1,0 +1,16 @@
+.env
+.env.*
+*.log
+*.tmp
+*.bak
+*.pfx
+*.p12
+*.key
+*.cer
+*.crt
+secrets/
+credentials/
+test-results/
+coverage/
+.vscode/
+.idea/
