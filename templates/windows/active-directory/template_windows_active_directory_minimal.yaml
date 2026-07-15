@@ -1,0 +1,231 @@
+zabbix_export:
+  version: '7.2'
+  template_groups:
+    - uuid: 62fdc87079414bc8b4fa5cdc692412c9
+      name: 'Templates/Active Directory'
+  templates:
+    - uuid: 33d9d65239d242f3a3e0fa92549b5ef3
+      template: 'Windows Active Directory - Minimal'
+      name: 'Windows Active Directory - Minimal'
+      description: |
+        Minimal, high-signal Active Directory monitoring for Windows Server domain controllers.
+
+        Link this template together with the official "Windows by Zabbix agent" template.
+        Required agent configuration and the AdHealth.ps1 helper are in this repository.
+        This template intentionally excludes replication checks; link the companion
+        replication template only after a second domain controller has been promoted.
+      groups:
+        - name: 'Templates/Active Directory'
+      items:
+        - uuid: 264cfcb5a14341c493cbff86dcc4371e
+          name: 'AD DS service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[NTDS,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: ad-ds
+          triggers:
+            - uuid: 9627d973f2224a21a027f61c841dc175
+              expression: 'min(/Windows Active Directory - Minimal/service.info[NTDS,state],2m)<>0'
+              name: 'AD DS service is not running'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: ca3c1b041cfe40e289c78c190d4fee1f
+          name: 'DNS Server service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[DNS,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: dns
+          triggers:
+            - uuid: 52188c89a2714e13bdb599524278b0dc
+              expression: 'min(/Windows Active Directory - Minimal/service.info[DNS,state],2m)<>0'
+              name: 'DNS Server service is not running'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 378357a5b6014267856f2704b8eb16bc
+          name: 'DFS Replication service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[DFSR,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: dfsr
+          triggers:
+            - uuid: b5289c5be80341c6bd6bf4e6c6295a52
+              expression: 'min(/Windows Active Directory - Minimal/service.info[DFSR,state],2m)<>0'
+              name: 'DFS Replication service is not running'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 212df9cdb18a49f5969dacad046fd6a0
+          name: 'Netlogon service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[Netlogon,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: netlogon
+          triggers:
+            - uuid: 8a33122b7a404129a296599e15ab9dc5
+              expression: 'min(/Windows Active Directory - Minimal/service.info[Netlogon,state],2m)<>0'
+              name: 'Netlogon service is not running'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 82a90b952ffd4b658a849eb5bdd0422b
+          name: 'Kerberos KDC service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[Kdc,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: kerberos
+          triggers:
+            - uuid: c1233277998b450489f748afec71dd8d
+              expression: 'min(/Windows Active Directory - Minimal/service.info[Kdc,state],2m)<>0'
+              name: 'Kerberos KDC service is not running'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: e7325a23afc74ec0a0c8d6d51bfba5c9
+          name: 'Windows Time service state'
+          type: ZABBIX_PASSIVE
+          key: 'service.info[W32Time,state]'
+          delay: 1m
+          tags:
+            - tag: component
+              value: time
+          triggers:
+            - uuid: a80919eff74a4b44857a8e7ff2a4b8fc
+              expression: 'min(/Windows Active Directory - Minimal/service.info[W32Time,state],2m)<>0'
+              name: 'Windows Time service is not running'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: b4dfad20a7844c0cb86d0f4013bf4bb8
+          name: 'SYSVOL and NETLOGON shares health'
+          type: ZABBIX_PASSIVE
+          key: ad.sysvol_netlogon.shares
+          delay: 1m
+          tags:
+            - tag: component
+              value: sysvol
+          triggers:
+            - uuid: 8cb1e43bf12d4dceaf99d9efae3114f4
+              expression: 'max(/Windows Active Directory - Minimal/ad.sysvol_netlogon.shares,3m)>0'
+              name: 'SYSVOL or NETLOGON share is missing'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 802ff9772fca43e89e78caafb57d3d67
+          name: 'Local DNS resolves AD LDAP SRV record'
+          type: ZABBIX_PASSIVE
+          key: ad.dns.srv_lookup
+          delay: 2m
+          tags:
+            - tag: component
+              value: dns
+          triggers:
+            - uuid: d075919837d14858be7958d3f653168e
+              expression: 'max(/Windows Active Directory - Minimal/ad.dns.srv_lookup,5m)>0'
+              name: 'Local DNS cannot resolve the AD LDAP SRV record'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: c808cec6ad7a4d949bad442dd2e6e77c
+          name: 'LDAP TCP availability'
+          type: SIMPLE
+          key: 'net.tcp.service[ldap,{HOST.CONN},389]'
+          delay: 2m
+          tags:
+            - tag: component
+              value: ldap
+          triggers:
+            - uuid: c59d489b1c65483cbddd07ae7a5f43f5
+              expression: 'max(/Windows Active Directory - Minimal/net.tcp.service[ldap,{HOST.CONN},389],3m)=0'
+              name: 'LDAP TCP port is unavailable from Zabbix server'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 9211e5fd184c41638275be366c5b12c1
+          name: 'Kerberos TCP availability'
+          type: SIMPLE
+          key: 'net.tcp.service[tcp,{HOST.CONN},88]'
+          delay: 2m
+          tags:
+            - tag: component
+              value: kerberos
+          triggers:
+            - uuid: 9f77c4e0cd6b4ddbbfe933939e15655d
+              expression: 'max(/Windows Active Directory - Minimal/net.tcp.service[tcp,{HOST.CONN},88],3m)=0'
+              name: 'Kerberos TCP port is unavailable from Zabbix server'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: d8ad807d987b40bcbf9461ca91166fc8
+          name: 'LDAP successful binds per second'
+          type: ZABBIX_PASSIVE
+          key: 'perf_counter_en["\\NTDS\\LDAP Successful Binds/sec",60]'
+          delay: 5m
+          value_type: FLOAT
+          tags:
+            - tag: component
+              value: ldap
+        - uuid: a92da2a15ac0423fa03c48c09b4689fd
+          name: 'LDAP searches per second'
+          type: ZABBIX_PASSIVE
+          key: 'perf_counter_en["\\NTDS\\LDAP Searches/sec",60]'
+          delay: 5m
+          value_type: FLOAT
+          tags:
+            - tag: component
+              value: ldap
+        - uuid: af1e434ef257445ab017725601424697
+          name: 'DFSR critical event log entry'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[DFS Replication,,,,(2213|4012|2104),100,skip]'
+          delay: 1m
+          value_type: LOG
+          tags:
+            - tag: component
+              value: dfsr
+          triggers:
+            - uuid: d84b86fa16cd42948c8832dda6f68964
+              expression: 'count(/Windows Active Directory - Minimal/eventlog[DFS Replication,,,,(2213|4012|2104),100,skip],15m)>0'
+              name: 'DFSR critical event detected'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 4a666a1fd8bf48058a5a2da4b1b85f4c
+          name: 'DNS Server critical event log entry'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[DNS Server,,,,(4000|4007|4013),100,skip]'
+          delay: 1m
+          value_type: LOG
+          tags:
+            - tag: component
+              value: dns
+          triggers:
+            - uuid: c5553bfe044d4d55a62a58a51a2b7884
+              expression: 'count(/Windows Active Directory - Minimal/eventlog[DNS Server,,,,(4000|4007|4013),100,skip],15m)>0'
+              name: 'DNS Server critical event detected'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability

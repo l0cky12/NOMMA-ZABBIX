@@ -1,0 +1,60 @@
+zabbix_export:
+  version: '7.2'
+  template_groups:
+    - uuid: 06d9298788294c3a82ab85307838368f
+      name: 'Templates/Active Directory'
+  templates:
+    - uuid: feeca5f86ba1465cac7d4962346ae44d
+      template: 'Windows Active Directory - Replication'
+      name: 'Windows Active Directory - Replication'
+      description: |
+        Replication health checks for Active Directory domain controllers.
+
+        Link this template only after the domain has two or more domain controllers.
+        It requires the AdHealth.ps1 helper and UserParameter configuration in this repository.
+      groups:
+        - name: 'Templates/Active Directory'
+      items:
+        - uuid: 33d9d65239d242f3a3e0fa92549b5ef3
+          name: 'AD replication failures'
+          type: ZABBIX_PASSIVE
+          key: ad.replication.failures
+          delay: 5m
+          tags:
+            - tag: component
+              value: replication
+          triggers:
+            - uuid: 264cfcb5a14341c493cbff86dcc4371e
+              expression: 'last(/Windows Active Directory - Replication/ad.replication.failures)>0'
+              name: 'Active Directory replication has failed partner(s)'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 9627d973f2224a21a027f61c841dc175
+          name: 'Oldest successful inbound replication age'
+          type: ZABBIX_PASSIVE
+          key: ad.replication.oldest_age
+          delay: 5m
+          units: s
+          tags:
+            - tag: component
+              value: replication
+          triggers:
+            - uuid: ca3c1b041cfe40e289c78c190d4fee1f
+              expression: 'min(/Windows Active Directory - Replication/ad.replication.oldest_age,15m)>1800'
+              name: 'Active Directory replication has not succeeded for over 30 minutes'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 52188c89a2714e13bdb599524278b0dc
+              expression: 'min(/Windows Active Directory - Replication/ad.replication.oldest_age,15m)>3600'
+              name: 'Active Directory replication has not succeeded for over 60 minutes'
+              priority: HIGH
+              dependencies:
+                - name: 'Active Directory replication has not succeeded for over 30 minutes'
+                  expression: 'min(/Windows Active Directory - Replication/ad.replication.oldest_age,15m)>1800'
+              tags:
+                - tag: scope
+                  value: availability
