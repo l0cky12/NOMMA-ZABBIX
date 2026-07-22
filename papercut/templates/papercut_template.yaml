@@ -1,0 +1,364 @@
+{
+  "zabbix_export": {
+    "version": "7.2",
+    "date": "2026-07-22T18:52:02Z",
+    "groups": [
+      {
+        "uuid": "0f57a278-a471-50b4-81ac-27ffbf33259b",
+        "name": "Templates/Applications"
+      }
+    ],
+    "templates": [
+      {
+        "uuid": "dd899bf1-f6b9-5096-909e-7f330ac009df",
+        "template": "PaperCut NG by Zabbix Agent 2",
+        "name": "PaperCut NG by Zabbix Agent 2",
+        "description": "Template for monitoring PaperCut NG print server. Monitors Application Server, database, licensing, site servers, printer health, print activity, and system resources. Requires Zabbix Agent 2 and custom scripts deployed on the PaperCut server.\n\nDeploy scripts from: https://github.com/l0cky12/NOMMA-ZABBIX/tree/main/papercut",
+        "groups": [
+          {
+            "name": "Templates/Applications"
+          }
+        ],
+        "items": [
+          {
+            "uuid": "612f1fd6-bbbd-5ece-913f-073c6e03a204",
+            "name": "PaperCut: Port 9191 (HTTP) reachable",
+            "type": "ZABBIX_ACTIVE",
+            "key": "net.tcp.service[tcp,,9191]",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "PaperCut HTTP port (web admin interface)",
+            "triggers": [
+              {
+                "uuid": "ac028037-2b70-5bb8-97ac-9171ccbdb9ee",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/net.tcp.service[tcp,,9191])=0",
+                "name": "PaperCut HTTP port 9191 is unreachable",
+                "priority": "HIGH",
+                "description": "PaperCut NG web interface is not responding on port 9191"
+              }
+            ]
+          },
+          {
+            "uuid": "6ee01bdd-00a8-53bb-9052-c78ca9cb91ea",
+            "name": "PaperCut: Port 9192 (HTTPS) reachable",
+            "type": "ZABBIX_ACTIVE",
+            "key": "net.tcp.service[tcp,,9192]",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "PaperCut HTTPS port"
+          },
+          {
+            "uuid": "d7d3e6cb-ea73-5d60-899c-859fd858045d",
+            "name": "PaperCut: Port 9195 (Internal) reachable",
+            "type": "ZABBIX_ACTIVE",
+            "key": "net.tcp.service[tcp,,9195]",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "PaperCut internal HTTPS port"
+          },
+          {
+            "uuid": "56371882-e13f-5340-8f73-660a15ec8783",
+            "name": "PaperCut: Port 9174 (Print Deploy) reachable",
+            "type": "ZABBIX_ACTIVE",
+            "key": "net.tcp.service[tcp,,9174]",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Print Deploy port"
+          },
+          {
+            "uuid": "ac56a946-2a70-5de8-ab57-4c6604e9b6c8",
+            "name": "PaperCut: Application Server status",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.appserver.status",
+            "delay": "2m",
+            "value_type": "UNSIGNED",
+            "description": "1 = running, 0 = stopped",
+            "triggers": [
+              {
+                "uuid": "38204223-9fc6-5719-b385-41ec8ed92640",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.appserver.status)=0",
+                "name": "PaperCut Application Server is DOWN",
+                "priority": "DISASTER",
+                "description": "PaperCut NG Application Server process is not running. Printing services may be affected."
+              }
+            ]
+          },
+          {
+            "uuid": "3acf3c83-06e3-50ce-91b1-40240be77ea1",
+            "name": "PaperCut: Database connection",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.db.connection",
+            "delay": "2m",
+            "value_type": "UNSIGNED",
+            "description": "1 = connected, 0 = disconnected",
+            "triggers": [
+              {
+                "uuid": "75e58e32-1a2f-58d2-a636-25d27da62053",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.db.connection)=0",
+                "name": "PaperCut database connection FAILED",
+                "priority": "HIGH",
+                "description": "PaperCut NG cannot connect to its internal database."
+              }
+            ]
+          },
+          {
+            "uuid": "e293fad5-387c-58f9-ab80-33a73c36b10a",
+            "name": "PaperCut: Database connection pool utilisation",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.db.pool",
+            "delay": "5m",
+            "value_type": "FLOAT",
+            "units": "%",
+            "description": "Percentage of database connection pool in use",
+            "triggers": [
+              {
+                "uuid": "bc7de8c8-f1dd-5689-8e6e-49d5e76a5a67",
+                "expression": "avg(/PaperCut NG by Zabbix Agent 2/papercut.db.pool,5m)>80",
+                "name": "PaperCut database pool utilisation > 80%",
+                "priority": "WARNING",
+                "description": "Database connection pool is approaching capacity."
+              },
+              {
+                "uuid": "1ac773d1-0e8a-5f16-a88a-bef68d60755c",
+                "expression": "avg(/PaperCut NG by Zabbix Agent 2/papercut.db.pool,5m)>90",
+                "name": "PaperCut database pool utilisation > 90%",
+                "priority": "HIGH",
+                "description": "Database connection pool is nearly exhausted. Connections may be refused."
+              }
+            ]
+          },
+          {
+            "uuid": "8f25910d-1d08-5529-817a-77ef2fffa516",
+            "name": "PaperCut: License valid",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.license.valid",
+            "delay": "1h",
+            "value_type": "UNSIGNED",
+            "description": "1 = valid, 0 = invalid/expired",
+            "triggers": [
+              {
+                "uuid": "0b23beba-bc5e-5dec-bb0f-6ee14bc0da65",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.license.valid)=0",
+                "name": "PaperCut license is INVALID or EXPIRED",
+                "priority": "HIGH",
+                "description": "PaperCut NG license is invalid or expired. Printing restrictions may apply."
+              }
+            ]
+          },
+          {
+            "uuid": "8e825dc4-1c95-5355-bd6b-d24622eeb7c8",
+            "name": "PaperCut: License expiry (days remaining)",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.license.expiry",
+            "delay": "1h",
+            "value_type": "UNSIGNED",
+            "units": "d",
+            "description": "Days until the PaperCut license expires",
+            "triggers": [
+              {
+                "uuid": "d18bcb51-9565-5988-8d86-710aa27665a6",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.license.expiry)<=30 and last(/PaperCut NG by Zabbix Agent 2/papercut.license.expiry)>7",
+                "name": "PaperCut license expires in {ITEM.VALUE} days",
+                "priority": "WARNING",
+                "description": "PaperCut NG license will expire within 30 days."
+              },
+              {
+                "uuid": "106c6825-e839-503a-84c8-cc6fbf5eb613",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.license.expiry)<=7",
+                "name": "PaperCut license expires in {ITEM.VALUE} days \u2014 RENEW NOW",
+                "priority": "HIGH",
+                "description": "PaperCut NG license will expire within 7 days. Immediate renewal required."
+              }
+            ]
+          },
+          {
+            "uuid": "a07e6a8b-4ad6-5e17-82d0-e6dd0398079f",
+            "name": "PaperCut: Offline site servers",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.siteservers.offline",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Count of site servers that are offline",
+            "triggers": [
+              {
+                "uuid": "e0b2a9fc-cf7c-5342-928d-1cb7e330f41a",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.siteservers.offline)>0",
+                "name": "PaperCut site server(s) offline: {ITEM.VALUE}",
+                "priority": "WARNING",
+                "description": "One or more PaperCut site servers are offline."
+              }
+            ]
+          },
+          {
+            "uuid": "a374e828-4978-5794-8603-f0afc9e5e2ce",
+            "name": "PaperCut: Root disk used",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.disk.root.pused",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "units": "%",
+            "description": "Root partition disk usage percentage",
+            "triggers": [
+              {
+                "uuid": "79030a73-19b7-550b-b8d8-81691af08f93",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.disk.root.pused)>80",
+                "name": "PaperCut root disk usage > 80%",
+                "priority": "WARNING",
+                "description": "Root partition is running low on space."
+              },
+              {
+                "uuid": "f7711334-1bf8-5073-b86c-1cc03efe5521",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.disk.root.pused)>90",
+                "name": "PaperCut root disk usage > 90%",
+                "priority": "HIGH",
+                "description": "Root partition is critically low on space."
+              }
+            ]
+          },
+          {
+            "uuid": "eb51c9e6-194f-5d83-a256-e4b3de44fef0",
+            "name": "PaperCut: /home disk used",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.disk.home.pused",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "units": "%",
+            "description": "Home partition disk usage percentage (PaperCut data location)",
+            "triggers": [
+              {
+                "uuid": "03d194fa-92b4-5f89-af01-136a849da20b",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.disk.home.pused)>80",
+                "name": "PaperCut /home disk usage > 80%",
+                "priority": "WARNING",
+                "description": "Home partition (PaperCut data) is running low on space."
+              },
+              {
+                "uuid": "409dbe59-5103-561e-8384-4bf21f8bb9f4",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.disk.home.pused)>90",
+                "name": "PaperCut /home disk usage > 90%",
+                "priority": "HIGH",
+                "description": "Home partition (PaperCut data) is critically low on space."
+              }
+            ]
+          },
+          {
+            "uuid": "da6c3d72-c748-5ebe-b488-991477b44462",
+            "name": "PaperCut: Total printers",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.printers.total",
+            "delay": "10m",
+            "value_type": "UNSIGNED",
+            "description": "Total number of configured printers"
+          },
+          {
+            "uuid": "1a9e109d-851f-5b43-9cbe-2a68d9bc4402",
+            "name": "PaperCut: Online printers",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.printers.online",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Number of printers currently online"
+          },
+          {
+            "uuid": "c4e69774-6e1b-5efc-85dd-b0b5ea3856d7",
+            "name": "PaperCut: Offline printers",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.printers.offline",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Number of printers currently offline",
+            "triggers": [
+              {
+                "uuid": "d583c6d5-8563-508b-9023-af473798235e",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.printers.offline)>0",
+                "name": "PaperCut printer(s) offline: {ITEM.VALUE}",
+                "priority": "WARNING",
+                "description": "One or more printers are offline."
+              }
+            ]
+          },
+          {
+            "uuid": "eec56a0c-70ba-5bfe-bc58-fd5a99f568bd",
+            "name": "PaperCut: Printers low toner",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.printers.toner_low",
+            "delay": "30m",
+            "value_type": "UNSIGNED",
+            "description": "Number of printers with low or empty toner",
+            "triggers": [
+              {
+                "uuid": "2c11cecb-1d1f-5606-9290-59b411e556cc",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.printers.toner_low)>0",
+                "name": "PaperCut printer(s) low toner: {ITEM.VALUE}",
+                "priority": "WARNING",
+                "description": "One or more printers have low or empty toner."
+              }
+            ]
+          },
+          {
+            "uuid": "cc42b4ea-5b95-59fe-850d-54a419fcce5d",
+            "name": "PaperCut: Printers with errors",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.printers.errors",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Number of printers reporting errors",
+            "triggers": [
+              {
+                "uuid": "c3070418-0214-5033-a9ee-2467155dc827",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.printers.errors)>0",
+                "name": "PaperCut printer(s) reporting errors: {ITEM.VALUE}",
+                "priority": "HIGH",
+                "description": "One or more printers have errors (jams, faults, etc.)."
+              }
+            ]
+          },
+          {
+            "uuid": "de56b94f-f5e1-59f1-a07f-0d994b88c644",
+            "name": "PaperCut: Minutes since last print job",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.activity.minutes_since",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "units": "m",
+            "description": "Minutes since the last completed print job",
+            "triggers": [
+              {
+                "uuid": "309123f0-0a58-5747-bffd-f7159ea41d69",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.activity.minutes_since)>60 and last(/PaperCut NG by Zabbix Agent 2/papercut.activity.minutes_since)<=180",
+                "name": "PaperCut: No print jobs for {ITEM.VALUE} minutes",
+                "priority": "WARNING",
+                "description": "No print activity in over an hour. Possible queue issue."
+              },
+              {
+                "uuid": "c6590a4d-ed26-5400-b853-73b0fb00031c",
+                "expression": "last(/PaperCut NG by Zabbix Agent 2/papercut.activity.minutes_since)>180",
+                "name": "PaperCut: No print jobs for {ITEM.VALUE} minutes \u2014 STALE QUEUE",
+                "priority": "HIGH",
+                "description": "No print activity in over 3 hours. Printing may be stuck."
+              }
+            ]
+          },
+          {
+            "uuid": "fee5020e-471b-5938-9c66-3d89f6bb2987",
+            "name": "PaperCut: Print jobs (last hour)",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.activity.jobs_last_hour",
+            "delay": "5m",
+            "value_type": "UNSIGNED",
+            "description": "Number of print jobs completed in the last 60 minutes"
+          },
+          {
+            "uuid": "22efb3aa-1b74-540d-ab08-33d84883cbb1",
+            "name": "PaperCut: Print jobs (last 24h)",
+            "type": "ZABBIX_ACTIVE",
+            "key": "papercut.activity.jobs_last_day",
+            "delay": "30m",
+            "value_type": "UNSIGNED",
+            "description": "Number of print jobs completed in the last 24 hours"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -12,7 +12,12 @@ Active Directory/
 └── Templates/    — Zabbix 7.2 YAML templates
 
 papercut/
-└── prompt.md     — Prompt for Hermes to build PaperCut NG monitoring
+├── README.md           — Overview and quick start
+├── setup.sh            — One-command deployment script
+├── scripts/            — Health check scripts (bash)
+├── agent/              — Zabbix Agent 2 config
+├── templates/          — Zabbix 7.2 template YAML
+└── docs/               — Deployment guide
 ```
 
 ## Windows Active Directory
@@ -38,4 +43,20 @@ See [`Active Directory/Docs/deployment.md`](Active%20Directory/Docs/deployment.m
 
 ## PaperCut NG
 
-Monitoring for PaperCut NG print server, Print Deploy, and printer health. See [`papercut/prompt.md`](papercut/prompt.md) — paste that into the Hermes orchestrator to build the full setup.
+Monitoring for PaperCut NG print server (Debian 12, internal H2 database) with Zabbix Agent 2.
+
+**20 items, 18 triggers** covering: Application Server, database connection & pool, licensing, site servers, port health, disk usage, printer status (online/offline/toner/errors), and print activity.
+
+### Quick start
+
+1. **SSH into the PaperCut server** (`10.1.0.113`) and run:
+   ```bash
+   cd /tmp
+   git clone https://github.com/l0cky12/NOMMA-ZABBIX.git
+   cd NOMMA-ZABBIX/papercut
+   sudo bash setup.sh
+   ```
+2. **Import the template** in Zabbix web UI (Configuration → Templates → Import → `papercut_template.yaml`)
+3. **Link the template** to the "Papercut" host
+
+See [`papercut/README.md`](papercut/README.md) and [`papercut/docs/deployment.md`](papercut/docs/deployment.md) for the full guide.
