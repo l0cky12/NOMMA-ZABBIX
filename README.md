@@ -18,6 +18,14 @@ papercut/
 ├── agent/              — Zabbix Agent 2 config
 ├── templates/          — Zabbix 7.2 template YAML
 └── docs/               — Deployment guide
+
+Hyper-V/
+├── scripts/            — PowerShell collector script
+├── agent/              — Zabbix Agent 2 UserParameter config
+├── templates/          — Zabbix template YAML
+├── dashboards/         — Zabbix dashboard import YAML
+├── tests/              — Test scripts and fixtures
+└── docs/               — Troubleshooting guide
 ```
 
 ## Windows Active Directory
@@ -60,3 +68,17 @@ Monitoring for PaperCut NG print server (Debian 12, internal H2 database) with Z
 3. **Link the template** to the "Papercut" host
 
 See [`papercut/README.md`](papercut/README.md) and [`papercut/docs/deployment.md`](papercut/docs/deployment.md) for the full guide.
+
+## Hyper-V
+
+Hyper-V host monitoring for Windows Server with Zabbix Agent 2. Collects VM states, resource usage, and host health via PowerShell.
+
+| File | Purpose |
+|------|---------|
+| `scripts/Get-ZabbixHyperV.ps1` | PowerShell collector — VM states, CPU, memory, host health |
+| `agent/userparameter_hyperv.conf` | Zabbix Agent 2 UserParameter definitions |
+| `templates/template_hyperv_standalone_replica_nomma.yaml` | Zabbix 7.2 template |
+| `dashboards/dashboard_hyperv_fleet_nomma.yaml` | Fleet overview dashboard |
+| `tests/` | Test fixtures and validation scripts |
+
+See [`Hyper-V/README.md`](Hyper-V/README.md) for details.
