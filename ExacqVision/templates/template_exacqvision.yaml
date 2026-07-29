@@ -1,0 +1,145 @@
+zabbix_export:
+  version: "7.2"
+  template_groups:
+    - name: "NOMMA/ExacqVision"
+  templates:
+    - uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      template: "NOMMA ExacqVision by Zabbix Agent"
+      name: "NOMMA ExacqVision by Zabbix Agent"
+      description: |
+        Template for exacqVisionServer monitoring with auto-remediation.
+
+        Monitors the exacqVisionServer Windows service, triggers a restart
+        script after 10 minutes of downtime, and alerts if all retries fail.
+
+        Items:
+          - Native service state check (every 60s)
+          - Restart status flag reader (every 60s)
+          - Uptime info
+
+        Triggers:
+          - "exacqVisionServer DOWN" — fires after 10 minutes stopped
+          - "exacqVisionServer restart FAILED" — all 3 retries exhausted
+
+        Requires:
+          - Zabbix Agent 2 on Windows
+          - userparameter_exacq.conf deployed to zabbix_agent2.d/
+          - exacq_restart.ps1 deployed to scripts/ directory
+          - Zabbix Action: run remote command on DOWN trigger
+          - Zabbix Action: send email on FAILED trigger
+      groups:
+        - name: "NOMMA/ExacqVision"
+      items:
+        # ---- ITEM 1: Native service state ----
+        - uuid: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+          name: "exacqVisionServer: Service state"
+          type: ZABBIX_ACTIVE
+          key: "service.info[exacqVisionServer,state]"
+          delay: "60s"
+          value_type: UNSIGNED
+          description: |
+            Status of the exacqVisionServer Windows service.
+            0 - Running
+            1 - Paused
+            2 - Start Pending
+            3 - Stop Pending
+            4 - Continuing
+            5 - Pending
+            6 - Stopped
+            7 - Unknown
+            255 - No such service
+          triggers:
+            - uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+              expression: "min(/NOMMA ExacqVision by Zabbix Agent/service.info[exacqVisionServer,state],10m)=6"
+              name: "exacqVisionServer DOWN — stopped for 10+ minutes"
+              priority: HIGH
+              description: |
+                The exacqVisionServer service has been in STOPPED state for
+                at least 10 consecutive minutes.
+
+                A Zabbix Action should trigger the restart script:
+                  powershell -ExecutionPolicy Bypass -File
+                    "C:\Program Files\Zabbix Agent 2\scripts\exacq_restart.ps1"
+
+                If the restart succeeds, this trigger auto-resolves.
+                If it fails, the FAILED trigger fires for email notification.
+              manual_close: "NO"
+              recovery_mode: EXPRESSION
+              correlation_mode: DISABLED
+
+        # ---- ITEM 2: Restart status flag ----
+        - uuid: "d4e5f6a7-b8c9-0123-defa-234567890123"
+          name: "exacqVisionServer: Last restart result"
+          type: ZABBIX_ACTIVE
+          key: "exacq.restart.status"
+          delay: "60s"
+          value_type: CHARACTER
+          description: |
+            Reads the status flag file written by exacq_restart.ps1.
+            Values: RUNNING | RESTARTED | WAITING | FAILED | NOT_FOUND | NO_DATA
+
+            - RUNNING: Service was already running (no restart needed)
+            - RESTARTED: Script restarted the service successfully
+            - WAITING: Script is in the 10-minute wait window
+            - FAILED: All 3 restart attempts failed
+            - NOT_FOUND: Service doesn't exist on this host
+            - NO_DATA: Status file not yet created
+          triggers:
+            - uuid: "e5f6a7b8-c9d0-1234-efab-345678901234"
+              expression: "last(/NOMMA ExacqVision by Zabbix Agent/exacq.restart.status)=\"FAILED\""
+              name: "exacqVisionServer restart FAILED — manual intervention required"
+              priority: DISASTER
+              description: |
+                The exacq_restart.ps1 script attempted to restart the
+                exacqVisionServer service 3 times and all attempts failed.
+
+                Action required:
+                  1. RDP to the camera server (10.1.0.208)
+                  2. Check C:\ProgramData\Zabbix\exacqvision\exacq_restart.log
+                  3. Verify exacqVisionServer service status manually
+                  4. Check Windows Event Viewer for service errors
+                  5. Restart the service or server manually if needed
+              manual_close: "YES"
+              recovery_mode: EXPRESSION
+              correlation_mode: DISABLED
+
+        # ---- ITEM 3: System uptime ----
+        - uuid: "f6a7b8c9-d0e1-2345-fabc-456789012345"
+          name: "Camera server: System uptime"
+          type: ZABBIX_ACTIVE
+          key: "exacq.uptime"
+          delay: "300s"
+          value_type: FLOAT
+          units: "uptime"
+          description: "Seconds since the camera server last booted (useful for correlating restarts)"
+
+      discovery_rules: []
+      dashboards: []
+      tags:
+        - tag: "service"
+          value: "exacqvision"
+        - tag: "class"
+          value: "surveillance"
+      macros: []
+      valuemaps:
+        - uuid: "a7b8c9d0-e1f2-3456-abcd-567890123456"
+          name: "exacq_service_state"
+          mappings:
+            - value: 0
+              newvalue: "Running"
+            - value: 1
+              newvalue: "Paused"
+            - value: 2
+              newvalue: "Start Pending"
+            - value: 3
+              newvalue: "Stop Pending"
+            - value: 4
+              newvalue: "Continuing"
+            - value: 5
+              newvalue: "Pending"
+            - value: 6
+              newvalue: "Stopped"
+            - value: 7
+              newvalue: "Unknown"
+            - value: 255
+              newvalue: "No Such Service"
