@@ -33,7 +33,8 @@ param(
     [string]$ServiceName = "exacqVisionServer",
     [int]$MaxRetries = 3,
     [int]$RetryDelaySeconds = 30,
-    [string]$LogDir = "C:\ProgramData\Zabbix\exacqvision"
+    [string]$LogDir = "C:\ProgramData\Zabbix\exacqvision",
+    [switch]$Fast   # use 2-min debounce instead of 10 for testing
 )
 
 # ---- Paths ----
@@ -85,15 +86,16 @@ if ($service.Status -eq 'Running') {
 }
 
 Write-Log "Service is STOPPED (status: $($service.Status))."
-Write-Log "Waiting 10 minutes before acting (in case of brief blip)..."
+$debounceSeconds = if ($Fast) { 120 } else { 600 }
+Write-Log "Waiting $debounceSeconds seconds ($($debounceSeconds / 60) min) before acting (in case of brief blip)..."
 Write-Status "WAITING"
 
-Start-Sleep -Seconds 600   # 10 minutes
+Start-Sleep -Seconds $debounceSeconds
 
 # ---- Step 3: Re-check after wait ----
 $service.Refresh()
 if ($service.Status -eq 'Running') {
-    Write-Log "Service recovered on its own during the 10-minute wait. No action needed."
+    Write-Log "Service recovered on its own during the debounce wait. No action needed."
     Write-Status "RUNNING"
     exit 0
 }
