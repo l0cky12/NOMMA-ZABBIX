@@ -1,7 +1,8 @@
 zabbix_export:
   version: "7.2"
   template_groups:
-    - name: "NOMMA/ExacqVision"
+    - uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
+      name: "NOMMA/ExacqVision"
   templates:
     - uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       template: "NOMMA ExacqVision by Zabbix Agent"
