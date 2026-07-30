@@ -1,5 +1,5 @@
 zabbix_export:
-  version: "7.2"
+  version: "7.4"
   template_groups:
     - uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567891"
       name: "NOMMA/ExacqVision"
@@ -38,6 +38,8 @@ zabbix_export:
           key: "service.info[exacqVisionServer,state]"
           delay: "60s"
           value_type: UNSIGNED
+          valuemap:
+            name: "exacq_service_state"
           description: |
             Status of the exacqVisionServer Windows service.
             0 - Running
@@ -65,7 +67,7 @@ zabbix_export:
                 If the restart succeeds, this trigger auto-resolves.
                 If it fails, the FAILED trigger fires for email notification.
               manual_close: "NO"
-              recovery_mode: EXPRESSION
+              recovery_mode: NONE
               correlation_mode: DISABLED
 
         # ---- ITEM 2: Restart status flag ----
@@ -101,7 +103,7 @@ zabbix_export:
                   4. Check Windows Event Viewer for service errors
                   5. Restart the service or server manually if needed
               manual_close: "YES"
-              recovery_mode: EXPRESSION
+              recovery_mode: NONE
               correlation_mode: DISABLED
 
         # ---- ITEM 3: System uptime ----
@@ -126,21 +128,21 @@ zabbix_export:
         - uuid: "a7b8c9d0-e1f2-3456-abcd-567890123456"
           name: "exacq_service_state"
           mappings:
-            - value: 0
+            - value: "0"
               newvalue: "Running"
-            - value: 1
+            - value: "1"
               newvalue: "Paused"
-            - value: 2
+            - value: "2"
               newvalue: "Start Pending"
-            - value: 3
+            - value: "3"
               newvalue: "Stop Pending"
-            - value: 4
+            - value: "4"
               newvalue: "Continuing"
-            - value: 5
+            - value: "5"
               newvalue: "Pending"
-            - value: 6
+            - value: "6"
               newvalue: "Stopped"
-            - value: 7
+            - value: "7"
               newvalue: "Unknown"
-            - value: 255
+            - value: "255"
               newvalue: "No Such Service"
