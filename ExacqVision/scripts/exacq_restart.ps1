@@ -4,20 +4,20 @@
     Called by Zabbix Action when the service has been stopped for 10+ minutes.
 
 .DESCRIPTION
-    1. Checks if exacqVisionServer is running — exits cleanly if it is
+    1. Checks if exacqVisionServer is running - exits cleanly if it is
     2. Waits 10 minutes (avoids reacting to brief blips)
     3. Attempts to restart the service up to 3 times with 30-second gaps
     4. Logs every action to a rotating log file
     5. Writes a status flag file for Zabbix to consume
 
     Exit codes:
-        0 — Service running (no action needed or restart succeeded)
-        2 — All retries exhausted, service still stopped
+        0 - Service running (no action needed or restart succeeded)
+        2 - All retries exhausted, service still stopped
     
     Status flag values:
-        RUNNING   — Service was already running (no action needed)
-        RESTARTED — Service was restarted successfully
-        FAILED    — All restart attempts failed
+        RUNNING   - Service was already running (no action needed)
+        RESTARTED - Service was restarted successfully
+        FAILED    - All restart attempts failed
 
 .PARAMETER ServiceName
     Windows service name to monitor/restart (default: exacqVisionServer)
@@ -115,17 +115,17 @@ for ($i = 1; $i -le $MaxRetries; $i++) {
         
         $service.Refresh()
         if ($service.Status -eq 'Running') {
-            Write-Log "Attempt $i: SUCCESS — service is now running."
+            Write-Log "Attempt ${i}: SUCCESS - service is now running."
             $success = $true
-            $attemptDetails += "Attempt $i: SUCCESS"
+            $attemptDetails += "Attempt ${i}: SUCCESS"
             break
         } else {
-            Write-Log "Attempt $i: Start completed but service status is $($service.Status)."
-            $attemptDetails += "Attempt $i: FAILED (status=$($service.Status))"
+            Write-Log "Attempt ${i}: Start completed but service status is $($service.Status)."
+            $attemptDetails += "Attempt ${i}: FAILED (status=$($service.Status))"
         }
     } catch {
-        Write-Log "Attempt $i: EXCEPTION — $($_.Exception.Message)"
-        $attemptDetails += "Attempt $i: EXCEPTION — $($_.Exception.Message)"
+        Write-Log "Attempt ${i}: EXCEPTION - $($_.Exception.Message)"
+        $attemptDetails += "Attempt ${i}: EXCEPTION - $($_.Exception.Message)"
     }
     
     # Wait before next retry (unless this was the last attempt)
