@@ -5,10 +5,9 @@
 
 .DESCRIPTION
     1. Checks if exacqVisionServer is running - exits cleanly if it is
-    2. Waits 10 minutes (avoids reacting to brief blips)
-    3. Attempts to restart the service up to 3 times with 30-second gaps
-    4. Logs every action to a rotating log file
-    5. Writes a status flag file for Zabbix to consume
+    2. Attempts to restart the service up to 3 times with 20-second gaps
+    3. Logs every action to a rotating log file
+    4. Writes a status flag file for Zabbix to consume
 
     Exit codes:
         0 - Service running (no action needed or restart succeeded)
@@ -24,7 +23,7 @@
 .PARAMETER MaxRetries
     Number of restart attempts (default: 3)
 .PARAMETER RetryDelaySeconds
-    Seconds between retry attempts (default: 30)
+    Seconds between retry attempts (default: 20)
 .PARAMETER LogDir
     Directory for log and status files (default: C:\ProgramData\Zabbix\exacqvision)
 #>
@@ -32,9 +31,8 @@
 param(
     [string]$ServiceName = "exacqVisionServer",
     [int]$MaxRetries = 3,
-    [int]$RetryDelaySeconds = 30,
-    [string]$LogDir = "C:\ProgramData\Zabbix\exacqvision",
-    [switch]$Fast   # use 2-min debounce instead of 10 for testing
+    [int]$RetryDelaySeconds = 20,
+    [string]$LogDir = "C:\ProgramData\Zabbix\exacqvision"
 )
 
 # ---- Paths ----
@@ -85,24 +83,10 @@ if ($service.Status -eq 'Running') {
     exit 0
 }
 
-Write-Log "Service is STOPPED (status: $($service.Status))."
-$debounceSeconds = if ($Fast) { 120 } else { 600 }
-Write-Log "Waiting $debounceSeconds seconds ($($debounceSeconds / 60) min) before acting (in case of brief blip)..."
+Write-Log "Service is STOPPED (status: $($service.Status)). Beginning restart attempts..."
 Write-Status "WAITING"
 
-Start-Sleep -Seconds $debounceSeconds
-
-# ---- Step 3: Re-check after wait ----
-$service.Refresh()
-if ($service.Status -eq 'Running') {
-    Write-Log "Service recovered on its own during the debounce wait. No action needed."
-    Write-Status "RUNNING"
-    exit 0
-}
-
-Write-Log "Service still stopped after 10-minute wait. Beginning restart attempts..."
-
-# ---- Step 4: Retry loop ----
+# ---- Step 3: Retry loop ----
 $success = $false
 $attemptDetails = @()
 
@@ -135,7 +119,7 @@ for ($i = 1; $i -le $MaxRetries; $i++) {
     }
 }
 
-# ---- Step 5: Write final status ----
+# ---- Step 4: Write final status ----
 $detailContent = $attemptDetails -join " | "
 
 if ($success) {

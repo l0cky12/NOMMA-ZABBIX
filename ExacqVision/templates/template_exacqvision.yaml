@@ -7,10 +7,10 @@ zabbix_export:
       template: "NOMMA ExacqVision by Zabbix Agent"
       name: "NOMMA ExacqVision by Zabbix Agent"
       description: |
-        Template for exacqVisionServer monitoring with auto-remediation.
+        Monitors the exacqVisionServer Windows service with auto-remediation.
 
         Monitors the exacqVisionServer Windows service, triggers a restart
-        script after 10 minutes of downtime, and alerts if all retries fail.
+        script after 5 minutes of downtime, and alerts if all retries fail.
 
         Items:
           - Native service state check (every 60s)
@@ -50,12 +50,12 @@ zabbix_export:
             255 - No such service
           triggers:
             - uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
-              expression: "min(/NOMMA ExacqVision by Zabbix Agent/service.info[exacqVisionServer,state],10m)=6"
-              name: "exacqVisionServer DOWN — stopped for 10+ minutes"
+              expression: "min(/NOMMA ExacqVision by Zabbix Agent/service.info[exacqVisionServer,state],5m)=6"
+              name: "exacqVisionServer DOWN — stopped for 5+ minutes"
               priority: HIGH
               description: |
                 The exacqVisionServer service has been in STOPPED state for
-                at least 10 consecutive minutes.
+                at least 5 consecutive minutes.
 
                 A Zabbix Action should trigger the restart script:
                   powershell -ExecutionPolicy Bypass -File

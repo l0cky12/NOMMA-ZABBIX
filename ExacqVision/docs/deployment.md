@@ -20,7 +20,7 @@ Camera Server (10.1.0.208)
   ├─ exacqVisionServer service ───── Zabbix checks every 60s
   │                                    (native service.info key)
   │
-  ├─ If STOPPED for 10 minutes ─────→ Trigger "DOWN" fires (HIGH)
+  ├─ If STOPPED for 5 minutes ──────→ Trigger "DOWN" fires (HIGH)
   │                                    Action runs restart script
   │                                      │
   │                                      ├─ Try 1 ──→ SUCCESS? → auto-resolve
@@ -114,7 +114,7 @@ zabbix_agent2 -t exacq.restart.status
 
 | Trigger | Conditions | Severity |
 |---------|-----------|----------|
-| exacqVisionServer DOWN | Stopped for ≥10 consecutive minutes | HIGH |
+| exacqVisionServer DOWN | Stopped for ≥5 consecutive minutes | HIGH |
 | Restart FAILED | Status = FAILED | DISASTER |
 
 ## Step 6: Link Template to Host
@@ -131,12 +131,12 @@ zabbix_agent2 -t exacq.restart.status
 
 ### Action 1: Restart on DOWN
 
-Trigger the restart script when service has been down 10+ minutes:
+Trigger the restart script when service has been down 5+ minutes:
 
 1. **Alerts → Actions → Trigger actions → Create action**
 2. **Name**: "exacqVisionServer - Auto-Restart"
 3. **Conditions**:
-   - Trigger name = `exacqVisionServer DOWN — stopped for 10+ minutes`
+   - Trigger name = `exacqVisionServer DOWN — stopped for 5+ minutes`
 4. **Operations → New**:
    - Operation type: **Remote command**
    - Target: **Current host**
