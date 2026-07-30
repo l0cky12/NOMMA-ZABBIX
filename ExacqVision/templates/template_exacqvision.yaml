@@ -19,7 +19,7 @@ zabbix_export:
           - Uptime info
 
         Triggers:
-          - "exacqVisionServer DOWN" — fires after 10 minutes stopped
+          - "exacqVisionServer DOWN" — fires after 5 minutes stopped
           - "exacqVisionServer restart FAILED" — all 3 retries exhausted
 
         Requires:
@@ -37,7 +37,7 @@ zabbix_export:
           type: ZABBIX_ACTIVE
           key: "service.info[exacqVisionServer,state]"
           delay: "60s"
-          value_type: UNSIGNED
+          value_type: 3
           description: |
             Status of the exacqVisionServer Windows service.
             0 - Running
@@ -74,14 +74,14 @@ zabbix_export:
           type: ZABBIX_ACTIVE
           key: "exacq.restart.status"
           delay: "60s"
-          value_type: CHARACTER
+          value_type: 1
           description: |
             Reads the status flag file written by exacq_restart.ps1.
             Values: RUNNING | RESTARTED | WAITING | FAILED | NOT_FOUND | NO_DATA
 
             - RUNNING: Service was already running (no restart needed)
             - RESTARTED: Script restarted the service successfully
-            - WAITING: Script is in the 10-minute wait window
+            - WAITING: Script is restarting the service
             - FAILED: All 3 restart attempts failed
             - NOT_FOUND: Service doesn't exist on this host
             - NO_DATA: Status file not yet created
@@ -110,7 +110,7 @@ zabbix_export:
           type: ZABBIX_ACTIVE
           key: "exacq.uptime"
           delay: "300s"
-          value_type: FLOAT
+          value_type: 0
           units: "uptime"
           description: "Seconds since the camera server last booted (useful for correlating restarts)"
 
