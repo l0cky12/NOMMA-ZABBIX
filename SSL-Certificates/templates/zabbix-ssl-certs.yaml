@@ -1,0 +1,546 @@
+zabbix_export:
+  version: "7.4"
+  template_groups:
+    - uuid: "4519b6342c5b46c4ab71c92b57592e31"
+      name: "NOMMA/SSL-Certificates"
+  templates:
+    - uuid: "cf559d38dff74111abb67b917adb13c9"
+      template: "NOMMA SSL Certificates by Zabbix Agent 2"
+      name: "NOMMA SSL Certificates by Zabbix Agent 2"
+      description: |
+        SSL/TLS certificate expiry monitoring for NOMMA Windows and Linux servers.
+
+        Two independent discovery paths:
+
+        1. ENDPOINT CHECK (primary, OS agnostic)
+           Set the host macro {$TLS.ENDPOINTS} to a comma separated list of
+           host:port endpoints, for example:
+             papercut.nomma.tech:9192,dc01.nomma.lan:636
+           A server side Script discovery rule splits that macro into one
+           endpoint per LLD row and Zabbix Agent 2 runs web.certificate.get
+           against each one. Adding a server means linking this template and
+           setting one macro. No template edits are required per host.
+
+        2. STORE SCAN (secondary, per OS, disabled by default)
+           Windows: enumerates Cert:\LocalMachine\My only (CurrentUser and all
+           CA/Root stores are skipped) via win-cert-discovery.ps1.
+           Linux: scans PEM/PFX files under {$TLS.STORE.PATHS} via
+           linux-cert-discovery.sh.
+           Enable the discovery rule that matches the host OS at host level.
+           Leaving both enabled on every host produces unsupported items on the
+           OS that does not have the matching UserParameter deployed.
+
+        Severity ladder (four triggers per discovered certificate/endpoint):
+          <= {$TLS.WARN.DAYS} days     WARNING   dashboard only
+          <= {$TLS.AVERAGE.DAYS} days  AVERAGE   dashboard only
+          <= {$TLS.HIGH.DAYS} days     HIGH      email
+          <= {$TLS.DISASTER.DAYS} days DISASTER  email
+        The bands do not overlap, so exactly one severity is active at a time.
+
+        All trigger prototypes carry the tags service=tls-certificate and
+        scope=certificate-expiry so a single Zabbix action can select them.
+
+        Requires Zabbix Agent 2 (web.certificate.get is an Agent 2 key).
+
+        Deploy scripts and agent configs from:
+        https://github.com/l0cky12/NOMMA-ZABBIX/tree/main/SSL-Certificates
+      groups:
+        - name: "NOMMA/SSL-Certificates"
+      tags:
+        - tag: "service"
+          value: "tls-certificate"
+        - tag: "class"
+          value: "security"
+      macros:
+        - macro: "{$TLS.ENDPOINTS}"
+          value: ""
+          description: |
+            Comma separated list of TLS endpoints to check, host:port.
+            Port defaults to 443 when omitted.
+            Example: papercut.nomma.tech:9192,dc01.nomma.lan:636
+            Leave empty to disable endpoint discovery on this host.
+        - macro: "{$TLS.STORE.PATHS}"
+          value: "/etc/pki,/etc/nginx,/etc/apache2,/etc/httpd,/etc/ssl/private,/home/papercut/server/custom"
+          description: |
+            Linux only. Comma separated directories or files to scan for
+            certificates. System trust roots under /etc/ssl/certs are always
+            excluded.
+        - macro: "{$TLS.WARN.DAYS}"
+          value: "21"
+          description: "Days remaining at or below which a WARNING is raised (dashboard only)."
+        - macro: "{$TLS.AVERAGE.DAYS}"
+          value: "14"
+          description: "Days remaining at or below which an AVERAGE is raised (dashboard only)."
+        - macro: "{$TLS.HIGH.DAYS}"
+          value: "7"
+          description: "Days remaining at or below which a HIGH is raised (email)."
+        - macro: "{$TLS.DISASTER.DAYS}"
+          value: "3"
+          description: "Days remaining at or below which a DISASTER is raised (email)."
+        - macro: "{$TLS.CERT.CN.MATCHES}"
+          value: ".*"
+          description: "Store scan LLD filter. Only certificates whose CN matches this regex are discovered."
+        - macro: "{$TLS.CERT.CN.NOT_MATCHES}"
+          value: "^$"
+          description: "Store scan LLD filter. Certificates whose CN matches this regex are ignored. Default drops certificates with no CN."
+      valuemaps:
+        - uuid: "2c82719869654fbd963bb7d31b76e73a"
+          name: "tls_cert_validation"
+          mappings:
+            - value: "valid"
+              newvalue: "Valid"
+            - value: "valid-but-self-signed"
+              newvalue: "Valid (self-signed)"
+            - value: "invalid"
+              newvalue: "Invalid"
+      discovery_rules:
+        # =====================================================================
+        # LLD 1: endpoint discovery - splits {$TLS.ENDPOINTS} into host:port
+        # Runs on the Zabbix server (Script type), so it needs nothing on the
+        # agent side and works identically on Windows and Linux hosts.
+        # =====================================================================
+        - uuid: "86e2ac275ecc48f79d2c5f6a961d0129"
+          name: "TLS endpoint discovery"
+          type: SCRIPT
+          key: "tls.endpoint.discovery"
+          delay: "1h"
+          description: |
+            Splits the host macro {$TLS.ENDPOINTS} into one LLD row per
+            endpoint. Produces {#TLS.ENDPOINT}, {#TLS.HOST} and {#TLS.PORT}.
+            Returns an empty list when the macro is empty or unresolved.
+          params: |
+            // Accept either the parameters object or a bare macro string.
+            var raw = value;
+            try {
+                var parsed = JSON.parse(value);
+                if (parsed !== null && typeof parsed === 'object' &&
+                    typeof parsed.endpoints === 'string') {
+                    raw = parsed.endpoints;
+                }
+            }
+            catch (e) {
+                raw = value;
+            }
+
+            var out = [];
+
+            if (typeof raw === 'string') {
+                var parts = raw.split(',');
+
+                for (var i = 0; i < parts.length; i++) {
+                    var ep = parts[i].replace(/^\s+/, '').replace(/\s+$/, '');
+
+                    if (ep.length === 0) {
+                        continue;
+                    }
+                    // Unresolved user macro - nothing to discover.
+                    if (ep.charAt(0) === '{') {
+                        continue;
+                    }
+
+                    var host = ep;
+                    var port = '443';
+                    var sep = ep.lastIndexOf(':');
+
+                    if (sep > 0) {
+                        host = ep.substring(0, sep);
+                        port = ep.substring(sep + 1);
+                    }
+
+                    if (host.length === 0 || !/^[0-9]{1,5}$/.test(port)) {
+                        continue;
+                    }
+
+                    out.push({
+                        '{#TLS.ENDPOINT}': host + ':' + port,
+                        '{#TLS.HOST}': host,
+                        '{#TLS.PORT}': port
+                    });
+                }
+            }
+
+            return JSON.stringify(out);
+          parameters:
+            - name: "endpoints"
+              value: "{$TLS.ENDPOINTS}"
+          item_prototypes:
+            - uuid: "98cf79067b2b40ee82a67012517b461c"
+              name: "TLS {#TLS.ENDPOINT}: certificate (raw)"
+              type: ZABBIX_ACTIVE
+              key: "web.certificate.get[{#TLS.HOST},{#TLS.PORT}]"
+              delay: "1h"
+              history: "7d"
+              value_type: TEXT
+              description: |
+                Raw JSON returned by the Zabbix Agent 2 built-in key
+                web.certificate.get. Master item for all endpoint dependent
+                items. Requires Zabbix Agent 2 with an active check
+                configuration (ServerActive).
+              tags:
+                - tag: "component"
+                  value: "tls-endpoint"
+            - uuid: "3009c3179f674c7db69e24be14b735d5"
+              name: "TLS {#TLS.ENDPOINT}: certificate expires on"
+              type: DEPENDENT
+              key: "tls.endpoint.not_after[{#TLS.ENDPOINT}]"
+              value_type: CHAR
+              description: "Human readable notAfter timestamp reported by the endpoint."
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - "$.x509.not_after.value"
+              master_item:
+                key: "web.certificate.get[{#TLS.HOST},{#TLS.PORT}]"
+              tags:
+                - tag: "component"
+                  value: "tls-endpoint"
+            - uuid: "bef804d4cecb4b11899cc809ea75280d"
+              name: "TLS {#TLS.ENDPOINT}: certificate subject"
+              type: DEPENDENT
+              key: "tls.endpoint.subject[{#TLS.ENDPOINT}]"
+              value_type: CHAR
+              description: "Subject DN of the certificate presented by the endpoint."
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - "$.x509.subject"
+              master_item:
+                key: "web.certificate.get[{#TLS.HOST},{#TLS.PORT}]"
+              tags:
+                - tag: "component"
+                  value: "tls-endpoint"
+            - uuid: "0451631add884e2f8d6f729300457372"
+              name: "TLS {#TLS.ENDPOINT}: certificate validation result"
+              type: DEPENDENT
+              key: "tls.endpoint.validation[{#TLS.ENDPOINT}]"
+              value_type: CHAR
+              description: |
+                Chain validation result reported by the agent:
+                valid, valid-but-self-signed or invalid.
+                Certificates issued by the internal ADCS report
+                valid-but-self-signed unless the agent host trusts
+                "NOMMA Issuing CA 01".
+              valuemap:
+                name: "tls_cert_validation"
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - "$.result.value"
+              master_item:
+                key: "web.certificate.get[{#TLS.HOST},{#TLS.PORT}]"
+              tags:
+                - tag: "component"
+                  value: "tls-endpoint"
+            - uuid: "190d9977ce274ded9f172a5e2a4c9000"
+              name: "TLS {#TLS.ENDPOINT}: days until certificate expiry"
+              type: DEPENDENT
+              key: "tls.endpoint.expiry.days[{#TLS.ENDPOINT}]"
+              value_type: FLOAT
+              units: "d"
+              description: |
+                Whole days remaining until the endpoint certificate expires,
+                derived from x509.not_after.timestamp. Negative once expired.
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - "$.x509.not_after.timestamp"
+                - type: JAVASCRIPT
+                  parameters:
+                    - "return Math.floor((Number(value) - Date.now() / 1000) / 86400);"
+              master_item:
+                key: "web.certificate.get[{#TLS.HOST},{#TLS.PORT}]"
+              tags:
+                - tag: "component"
+                  value: "tls-endpoint"
+              trigger_prototypes:
+                - uuid: "c72d4eb3d3d24eddac6f064a43b65148"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.not_after[{#TLS.ENDPOINT}])<>"" and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])<={$TLS.WARN.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])>{$TLS.AVERAGE.DAYS}'
+                  name: "TLS {#TLS.ENDPOINT}: certificate expires in {ITEM.LASTVALUE2} days, not after {ITEM.LASTVALUE1} (warning at {$TLS.WARN.DAYS}d)"
+                  priority: WARNING
+                  description: |
+                    The certificate served by {#TLS.ENDPOINT} expires within
+                    {$TLS.WARN.DAYS} days. Dashboard only, no email is sent at
+                    this severity. Start the renewal request with the internal
+                    ADCS ("NOMMA Issuing CA 01") now.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "ca82c620e0214080abb73d8024f5c1fc"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.not_after[{#TLS.ENDPOINT}])<>"" and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])<={$TLS.AVERAGE.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])>{$TLS.HIGH.DAYS}'
+                  name: "TLS {#TLS.ENDPOINT}: certificate expires in {ITEM.LASTVALUE2} days, not after {ITEM.LASTVALUE1} (average at {$TLS.AVERAGE.DAYS}d)"
+                  priority: AVERAGE
+                  description: |
+                    The certificate served by {#TLS.ENDPOINT} expires within
+                    {$TLS.AVERAGE.DAYS} days. Dashboard only, no email is sent
+                    at this severity. The renewal should already be in flight.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "82fdaedfd920496493d914d24629fb72"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.not_after[{#TLS.ENDPOINT}])<>"" and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])<={$TLS.HIGH.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])>{$TLS.DISASTER.DAYS}'
+                  name: "TLS {#TLS.ENDPOINT}: certificate expires in {ITEM.LASTVALUE2} days, not after {ITEM.LASTVALUE1} (high at {$TLS.HIGH.DAYS}d)"
+                  priority: HIGH
+                  description: |
+                    The certificate served by {#TLS.ENDPOINT} expires within
+                    {$TLS.HIGH.DAYS} days. This severity sends email.
+                    Issue and install the replacement certificate now.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "a4011bba624d4910946af365c6a1d889"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.not_after[{#TLS.ENDPOINT}])<>"" and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.endpoint.expiry.days[{#TLS.ENDPOINT}])<={$TLS.DISASTER.DAYS}'
+                  name: "TLS {#TLS.ENDPOINT}: certificate expires in {ITEM.LASTVALUE2} days, not after {ITEM.LASTVALUE1} (disaster at {$TLS.DISASTER.DAYS}d)"
+                  priority: DISASTER
+                  description: |
+                    The certificate served by {#TLS.ENDPOINT} expires within
+                    {$TLS.DISASTER.DAYS} days, or has already expired (the item
+                    goes negative after expiry). This severity sends email.
+                    Clients will start failing TLS validation on expiry.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+
+        # =====================================================================
+        # LLD 2: Windows certificate store scan (Cert:\LocalMachine\My only)
+        # Disabled by default - enable on Windows hosts at host level.
+        # =====================================================================
+        - uuid: "ef6db525065f462ab41f33419a0e79f4"
+          name: "Windows certificate store discovery"
+          type: ZABBIX_ACTIVE
+          key: "tls.certs.win.discovery"
+          delay: "1h"
+          status: DISABLED
+          description: |
+            Runs win-cert-discovery.ps1 -Mode discover through the
+            tls.certs.win.discovery UserParameter and enumerates
+            Cert:\LocalMachine\My only. CurrentUser and all CA/Root stores are
+            deliberately skipped.
+
+            Produces {#TLS.CERT.THUMBPRINT}, {#TLS.CERT.CN},
+            {#TLS.CERT.SUBJECT}, {#TLS.CERT.ISSUER}, {#TLS.CERT.NOTAFTER} and
+            {#TLS.CERT.STORE}.
+
+            Enable this rule on Windows hosts only.
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: "{#TLS.CERT.CN}"
+                value: "{$TLS.CERT.CN.MATCHES}"
+                formulaid: A
+              - macro: "{#TLS.CERT.CN}"
+                value: "{$TLS.CERT.CN.NOT_MATCHES}"
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+          item_prototypes:
+            - uuid: "e271a234584344288b36558248649f44"
+              name: "Cert store {#TLS.CERT.CN} ({#TLS.CERT.THUMBPRINT}): days until expiry"
+              type: ZABBIX_ACTIVE
+              key: "tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}]"
+              delay: "1h"
+              value_type: FLOAT
+              units: "d"
+              description: |
+                Whole days remaining until the machine certificate expires.
+                Negative once expired. Reported by win-cert-discovery.ps1
+                -Mode expiry -Thumbprint {#TLS.CERT.THUMBPRINT}.
+              tags:
+                - tag: "component"
+                  value: "windows-cert-store"
+              trigger_prototypes:
+                - uuid: "d8e35675f67d4ab792d4f1d329f29eef"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])<={$TLS.WARN.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])>{$TLS.AVERAGE.DAYS}'
+                  name: "Cert store {#TLS.CERT.CN} [{#TLS.CERT.THUMBPRINT}] on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (warning at {$TLS.WARN.DAYS}d)"
+                  priority: WARNING
+                  description: |
+                    Machine certificate {#TLS.CERT.CN} in {#TLS.CERT.STORE}
+                    (thumbprint {#TLS.CERT.THUMBPRINT}) expires within
+                    {$TLS.WARN.DAYS} days. Dashboard only, no email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "4c7beeda2fca4eaeb28d1c48eb1beedb"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])<={$TLS.AVERAGE.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])>{$TLS.HIGH.DAYS}'
+                  name: "Cert store {#TLS.CERT.CN} [{#TLS.CERT.THUMBPRINT}] on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (average at {$TLS.AVERAGE.DAYS}d)"
+                  priority: AVERAGE
+                  description: |
+                    Machine certificate {#TLS.CERT.CN} in {#TLS.CERT.STORE}
+                    (thumbprint {#TLS.CERT.THUMBPRINT}) expires within
+                    {$TLS.AVERAGE.DAYS} days. Dashboard only, no email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "e5ce50aa7fee4e848dd1c5d546e9c15f"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])<={$TLS.HIGH.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])>{$TLS.DISASTER.DAYS}'
+                  name: "Cert store {#TLS.CERT.CN} [{#TLS.CERT.THUMBPRINT}] on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (high at {$TLS.HIGH.DAYS}d)"
+                  priority: HIGH
+                  description: |
+                    Machine certificate {#TLS.CERT.CN} in {#TLS.CERT.STORE}
+                    (thumbprint {#TLS.CERT.THUMBPRINT}) expires within
+                    {$TLS.HIGH.DAYS} days. This severity sends email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "5aa771248fc44c38998f15f38304cee1"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.win.expiry[{#TLS.CERT.THUMBPRINT}])<={$TLS.DISASTER.DAYS}'
+                  name: "Cert store {#TLS.CERT.CN} [{#TLS.CERT.THUMBPRINT}] on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (disaster at {$TLS.DISASTER.DAYS}d)"
+                  priority: DISASTER
+                  description: |
+                    Machine certificate {#TLS.CERT.CN} in {#TLS.CERT.STORE}
+                    (thumbprint {#TLS.CERT.THUMBPRINT}) expires within
+                    {$TLS.DISASTER.DAYS} days or has already expired.
+                    This severity sends email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+
+        # =====================================================================
+        # LLD 3: Linux on-disk certificate scan
+        # Disabled by default - enable on Linux hosts at host level.
+        # =====================================================================
+        - uuid: "cfefbd7543a64277967aeb3d82dd951f"
+          name: "Linux certificate file discovery"
+          type: ZABBIX_ACTIVE
+          key: 'tls.certs.linux.discovery["{$TLS.STORE.PATHS}"]'
+          delay: "1h"
+          status: DISABLED
+          description: |
+            Runs linux-cert-discovery.sh discover through the
+            tls.certs.linux.discovery UserParameter and scans the directories
+            listed in {$TLS.STORE.PATHS} for PEM/DER/PKCS#12 certificates.
+            System trust roots under /etc/ssl/certs are always excluded.
+
+            PKCS#12 keystores are only read when /etc/zabbix/tls_check.env
+            exists and contains TLS_P12_PASSWORD. If it is missing they are
+            skipped silently and the endpoint check still covers PaperCut.
+
+            Produces {#TLS.CERT.FILE}, {#TLS.CERT.CN}, {#TLS.CERT.SUBJECT},
+            {#TLS.CERT.ISSUER}, {#TLS.CERT.NOTAFTER} and {#TLS.CERT.TYPE}.
+
+            Enable this rule on Linux hosts only.
+          filter:
+            evaltype: AND
+            conditions:
+              - macro: "{#TLS.CERT.CN}"
+                value: "{$TLS.CERT.CN.MATCHES}"
+                formulaid: A
+              - macro: "{#TLS.CERT.CN}"
+                value: "{$TLS.CERT.CN.NOT_MATCHES}"
+                operator: NOT_MATCHES_REGEX
+                formulaid: B
+          item_prototypes:
+            - uuid: "fed4c76fc2a64e0e900fdb0e62120c27"
+              name: "Cert file {#TLS.CERT.FILE} ({#TLS.CERT.CN}): days until expiry"
+              type: ZABBIX_ACTIVE
+              key: 'tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"]'
+              delay: "1h"
+              value_type: FLOAT
+              units: "d"
+              description: |
+                Whole days remaining until the certificate in
+                {#TLS.CERT.FILE} expires. Negative once expired.
+                Reported by linux-cert-discovery.sh expiry.
+              tags:
+                - tag: "component"
+                  value: "linux-cert-file"
+              trigger_prototypes:
+                - uuid: "ee5f38f8cc6845d9957024ea3c5b1674"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])<={$TLS.WARN.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])>{$TLS.AVERAGE.DAYS}'
+                  name: "Cert file {#TLS.CERT.FILE} ({#TLS.CERT.CN}) on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (warning at {$TLS.WARN.DAYS}d)"
+                  priority: WARNING
+                  description: |
+                    Certificate {#TLS.CERT.CN} in {#TLS.CERT.FILE} expires
+                    within {$TLS.WARN.DAYS} days. Dashboard only, no email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "292c3a35754b4a8e94584ee5f5584dcd"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])<={$TLS.AVERAGE.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])>{$TLS.HIGH.DAYS}'
+                  name: "Cert file {#TLS.CERT.FILE} ({#TLS.CERT.CN}) on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (average at {$TLS.AVERAGE.DAYS}d)"
+                  priority: AVERAGE
+                  description: |
+                    Certificate {#TLS.CERT.CN} in {#TLS.CERT.FILE} expires
+                    within {$TLS.AVERAGE.DAYS} days. Dashboard only, no email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "b9f947fecf1045ecbc722ff94f0de9e9"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])<={$TLS.HIGH.DAYS} and last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])>{$TLS.DISASTER.DAYS}'
+                  name: "Cert file {#TLS.CERT.FILE} ({#TLS.CERT.CN}) on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (high at {$TLS.HIGH.DAYS}d)"
+                  priority: HIGH
+                  description: |
+                    Certificate {#TLS.CERT.CN} in {#TLS.CERT.FILE} expires
+                    within {$TLS.HIGH.DAYS} days. This severity sends email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
+                - uuid: "a0e72efd8d01416d9e205c26919dc86b"
+                  expression: 'last(/NOMMA SSL Certificates by Zabbix Agent 2/tls.certs.linux.expiry["{#TLS.CERT.FILE}","{$TLS.STORE.PATHS}"])<={$TLS.DISASTER.DAYS}'
+                  name: "Cert file {#TLS.CERT.FILE} ({#TLS.CERT.CN}) on {HOST.NAME}: expires in {ITEM.LASTVALUE} days, not after {#TLS.CERT.NOTAFTER} (disaster at {$TLS.DISASTER.DAYS}d)"
+                  priority: DISASTER
+                  description: |
+                    Certificate {#TLS.CERT.CN} in {#TLS.CERT.FILE} expires
+                    within {$TLS.DISASTER.DAYS} days or has already expired.
+                    This severity sends email.
+                  manual_close: "NO"
+                  recovery_mode: NONE
+                  correlation_mode: DISABLED
+                  tags:
+                    - tag: "service"
+                      value: "tls-certificate"
+                    - tag: "scope"
+                      value: "certificate-expiry"
